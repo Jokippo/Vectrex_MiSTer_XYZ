@@ -137,6 +137,10 @@ port
 	video_r      : out std_logic_vector(7 downto 0);
 	video_g      : out std_logic_vector(7 downto 0);
 	video_b      : out std_logic_vector(7 downto 0);
+	
+	scopeh       : out std_logic_vector(9 downto 0);
+	scopev       : out std_logic_vector(9 downto 0);
+	scopez       : out std_logic_vector(7 downto 0);
 
 	frame_line   : out std_logic;
 	pers         : in  std_logic_vector(4 downto 0);
@@ -243,6 +247,8 @@ signal limited_y       : integer;
 
 signal beam_h          : unsigned(9 downto 0);
 signal beam_v          : unsigned(9 downto 0);
+signal beam_h2          : unsigned(9 downto 0);
+signal beam_v2          : unsigned(9 downto 0);
 
 signal beam_hd         : unsigned(9 downto 0);
 signal beam_vd         : unsigned(9 downto 0);
@@ -470,6 +476,19 @@ begin
 
 			beam_hd <= beam_h;
 			beam_vd <= beam_v;
+			
+			-- send beam XYZ at max 10-bit resolution
+			beam_v2 <= to_unsigned((limited_x*1000)/(2*max_x),10);
+			beam_h2 <= to_unsigned((limited_y*750)/(2*max_y),10);
+
+			scopeh  <= std_logic_vector(beam_h2);
+			scopev  <= std_logic_vector(beam_v2);
+			
+			if		beam_blank_n = '0' or beam_v2 > 999 or beam_h2 > 749 or beam_v2 < 1 or beam_h2 < 1  then		
+					scopez  <= X"00";
+			else	 
+					scopez  <= X"FF" ;
+			end if; 
 
 			if(beam_blank_n_delayed = '1' and beam_v = beam_vd and beam_h = beam_hd) then
 				if(dac_ob < 255) then

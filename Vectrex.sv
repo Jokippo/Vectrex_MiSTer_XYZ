@@ -53,6 +53,14 @@ module emu
 	output [1:0]  VGA_SL,
 	output        VGA_SCALER, // Force VGA scaler
 	output        VGA_DISABLE, // analog out is off
+	
+	output  [9:0] XYZ_X,  
+	output  [9:0] XYZ_Y,
+	output  [7:0] XYZ_Z,
+	output		  XYZ_EN,
+	output		  PWM_CLOCK,
+	output  [3:0] UPPERB,
+	output  		  XYZ_ROT,
 
 	input  [11:0] HDMI_WIDTH,
 	input  [11:0] HDMI_HEIGHT,
@@ -214,8 +222,11 @@ localparam CONF_STR = {
 	"OGH,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"OIJ,Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
 	"O9,Frame,No,Yes;",
-	//"O4,Resolution,High,Low;", // AJS - remove this because it ruins the
-	//overlay
+	"O4,XYZ over RGB,On,Off;",
+	"OLO,OSD Contrast,0,1,2,3,4,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1;", //21/25
+	"OQ,Rotate,No,Yes;",
+	"OR,Light Pen,No,Yes;",
+	"OST,Light Pen Button,0,1,2,3;",
 	"O23,Phosphor persistance,1,2,3,4;",
 	"O56,Pseudocolor,Off,1,2,3;",
 	"O8,Overburn,No,Yes;",
@@ -334,9 +345,26 @@ wire [9:0] height[2] = '{720, 410};
 wire frame_line;
 wire [7:0] r,g,b;
 
+wire [9:0] scopex,scopey;
+wire [7:0] scopez;
+
+assign XYZ_X = XYZ_ROT ? scopey : scopex;
+assign XYZ_Y = XYZ_ROT ? scopex : ~scopey;
+assign XYZ_Z = scopez;
+assign XYZ_EN= ~status[4];
+assign PWM_CLOCK = clk_mem;
+assign UPPERB = status[24:21] + 4'd11;
+assign XYZ_ROT = status[26];
+
+wire lightpen = status[27];
+wire [1:0] lpbutton = status[29:28];
+assign USER_OUT[0] = 1;
+assign USER_OUT[1] = 1;
+
 assign VGA_R = status[9] & frame_line ? 8'h40 : new_r;
 assign VGA_G = status[9] & frame_line ? 8'h00 : new_g;
 assign VGA_B = status[9] & frame_line ? 8'h00 : new_b;
+
 //assign VGA_R = bg_r;
 wire fg = |{r,g,b};
 wire bg = |{bg_r,bg_g,bg_b};
@@ -397,6 +425,10 @@ vectrex vectrex
 	.video_r(r),
 	.video_g(g),
 	.video_b(b),
+	
+	.scopeh(scopex),
+	.scopev(scopey),
+	.scopez(scopez),
 
 	.video_hblank(hblank),
 	.video_vblank(vblank),
@@ -412,17 +444,17 @@ vectrex vectrex
 	.speech_mode(status[12]),
 	.audio_out(audio),
 
-	.up_1(joystick_0[4]),
-	.dn_1(joystick_0[5]),
-	.lf_1(joystick_0[6]),
-	.rt_1(joystick_0[7]),
+	.up_1(lightpen ? (lpbutton == 0) ? ~USER_IN[1] : joystick_0[4] : joystick_0[4]),
+	.dn_1(lightpen ? (lpbutton == 1) ? ~USER_IN[1] : joystick_0[5] : joystick_0[5]),
+	.lf_1(lightpen ? (lpbutton == 2) ? ~USER_IN[1] : joystick_0[6] : joystick_0[6]),
+	.rt_1(lightpen ? (lpbutton == 3) ? ~USER_IN[1] : joystick_0[7] : joystick_0[7]),
 	.pot_x_1(joya_0[7:0]  ? joya_0[7:0]   : {joystick_0[1], {7{joystick_0[0]}}}),
 	.pot_y_1(joya_0[15:8] ? ~joya_0[15:8] : {joystick_0[2], {7{joystick_0[3]}}}),
 
 	.up_2(joystick_1[4]),
 	.dn_2(joystick_1[5]),
 	.lf_2(joystick_1[6]),
-	.rt_2(joystick_1[7]),
+	.rt_2(lightpen ? ~USER_IN[0] : joystick_1[7]),
 	.pot_x_2(joya_1[7:0]  ? joya_1[7:0]   : {joystick_1[1], {7{joystick_1[0]}}}),
 	.pot_y_2(joya_1[15:8] ? ~joya_1[15:8] : {joystick_1[2], {7{joystick_1[3]}}})
 );

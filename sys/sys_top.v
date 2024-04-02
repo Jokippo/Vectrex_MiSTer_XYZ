@@ -69,11 +69,11 @@ module sys_top
 
 `else
 	//////////// VGA ///////////
-	output  [5:0] VGA_R,
-	output  [5:0] VGA_G,
-	output  [5:0] VGA_B,
-	inout         VGA_HS,  // VGA_HS is secondary SD card detect when VGA_EN = 1 (inactive)
-	output		  VGA_VS,
+	output  reg [5:0] VGA_R,
+	output  reg [5:0] VGA_G,
+	output  reg [5:0] VGA_B,
+	inout   reg   VGA_HS,  // VGA_HS is secondary SD card detect when VGA_EN = 1 (inactive)
+	output  reg   VGA_VS,
 	input         VGA_EN,  // active low
 
 	/////////// AUDIO //////////
@@ -1347,12 +1347,16 @@ csync csync_vga(clk_vid, vga_hs_osd, vga_vs_osd, vga_cs_osd);
 	);
 
 	wire cs1 = (vga_fb | vga_scaler) ? vgas_cs : vga_cs;
-
-	assign VGA_VS = (VGA_EN | SW[3]) ? 1'bZ      : (((vga_fb | vga_scaler) ? (~vgas_vs ^ VS[12])                         : VGA_DISABLE ? 1'd1 : ~vga_vs) | csync_en);
-	assign VGA_HS = (VGA_EN | SW[3]) ? 1'bZ      :  ((vga_fb | vga_scaler) ? ((csync_en ? ~vgas_cs : ~vgas_hs) ^ HS[12]) : VGA_DISABLE ? 1'd1 : (csync_en ? ~vga_cs : ~vga_hs));
-	assign VGA_R  = (VGA_EN | SW[3]) ? 6'bZZZZZZ :   (vga_fb | vga_scaler) ? vgas_o[23:18]                               : VGA_DISABLE ? 6'd0 : vga_o[23:18];
-	assign VGA_G  = (VGA_EN | SW[3]) ? 6'bZZZZZZ :   (vga_fb | vga_scaler) ? vgas_o[15:10]                               : VGA_DISABLE ? 6'd0 : vga_o[15:10];
-	assign VGA_B  = (VGA_EN | SW[3]) ? 6'bZZZZZZ :   (vga_fb | vga_scaler) ? vgas_o[7:2]                                 : VGA_DISABLE ? 6'd0 : vga_o[7:2]  ;
+	
+	wire vga_clk = xyz_o_rgb ? pwm_clk : clk_vid;
+	
+always @(posedge vga_clk) begin
+	VGA_VS <= (VGA_EN | SW[3]) ? 1'bZ      : (((vga_fb | vga_scaler) ? (~vgas_vs ^ VS[12])                         : VGA_DISABLE ? 1'd1 : ~vga_vs) | csync_en);
+	VGA_HS <= (VGA_EN | SW[3]) ? 1'bZ      :  ((vga_fb | vga_scaler) ? ((csync_en ? ~vgas_cs : ~vgas_hs) ^ HS[12]) : VGA_DISABLE ? 1'd1 : (csync_en ? ~vga_cs : ~vga_hs));
+	VGA_R  <= (VGA_EN | SW[3]) ? 6'bZZZZZZ :   (vga_fb | vga_scaler) ? xyz_o_rgb ? pwm_x[5:0] : vgas_o[23:18]      : VGA_DISABLE ? 6'd0 : xyz_o_rgb ? pwm_x[5:0] : vga_o[23:18];
+	VGA_G  <= (VGA_EN | SW[3]) ? 6'bZZZZZZ :   (vga_fb | vga_scaler) ? xyz_o_rgb ? pwm_y[5:0] : vgas_o[15:10]      : VGA_DISABLE ? 6'd0 : xyz_o_rgb ? pwm_y[5:0] : vga_o[15:10];
+	VGA_B  <= (VGA_EN | SW[3]) ? 6'bZZZZZZ :   (vga_fb | vga_scaler) ? xyz_o_rgb ? beam_z : vgas_o[7:2]            : VGA_DISABLE ? 6'd0 : xyz_o_rgb ? beam_z : vga_o[7:2]  ;
+end
 `endif
 
 reg video_sync = 0;
@@ -1378,6 +1382,64 @@ always @(posedge clk_vid) begin
 	end
 
 	if(de_emu) hs_cnt <= 0;
+end
+
+//////////////////////////  XYZ Beam Control  ////////////////////////////
+
+wire [9:0] beam_x = osd_status ? xyz_rot ? ~osdbeam_y : osdbeam_x : x_out; 
+wire [9:0] beam_y = osd_status ? xyz_rot ? osdbeam_x : osdbeam_y : y_out;
+wire [5:0] beam_z = osd_status ? vgas_o[15] ? {1'b0, upperb, 1'b0} : 6'd0 : z_out[7:2]; 
+ 
+reg hblank_p1, hblank_p2, hblank_p3;
+reg vblank_p1, vblank_p2, vblank_p3;
+reg [9:0] osdbeam_x, osdbeam_y;
+reg [9:0] osdbeam_xt;
+always @(posedge clk_vid) begin
+
+	
+	if	(vgas_hs && hblank_p1 && ~hblank_p2 && ~hblank_p3)
+		osdbeam_xt <= 10'd150;
+	else 
+		osdbeam_xt <= osdbeam_xt + 2'd3;
+		
+		
+	if ((osdbeam_xt > 0) && (osdbeam_xt < 750))
+		osdbeam_x <= osdbeam_x + 2'd3;
+	else
+		osdbeam_x <= 10'd16;
+	
+	if	(vgas_vs && vblank_p1 && ~vblank_p2 && ~vblank_p3) begin
+		osdbeam_y <= 50;
+	end
+	else if (vgas_hs && hblank_p1 && ~hblank_p2 && ~hblank_p3) begin
+		osdbeam_y <= osdbeam_y - 2'd2;
+	end
+	
+	hblank_p1 <= vgas_hs; hblank_p2 <= hblank_p1; hblank_p3 <= hblank_p2;
+	vblank_p1 <= vgas_vs; vblank_p2 <= vblank_p1; vblank_p3 <= vblank_p2;
+		
+end
+	
+
+reg [5:0] pwm_x, pwm_y;
+reg [3:0] vga_pwm;
+always @(posedge pwm_clk) begin
+
+	if	(vgas_hs && hblank_p1 && ~hblank_p2 && ~hblank_p3)
+		vga_pwm <= 0;
+	else
+		vga_pwm <= vga_pwm + 1'd1; 
+	
+	if (vga_pwm < beam_x[3:0])
+		pwm_y[5:0] <= beam_x[9:4] + 1'd1;
+	else 	
+		pwm_y[5:0] <= beam_x[9:4];
+		
+	if (vga_pwm < beam_y[3:0])
+		pwm_x[5:0] <= beam_y[9:4] + 1'd1;
+	else 	
+		pwm_x[5:0] <= beam_y[9:4];
+
 end
 
 /////////////////////////  Audio output  ////////////////////////////////
@@ -1492,11 +1554,16 @@ wire [15:0] audio_l, audio_r;
 wire        audio_s;
 wire  [1:0] audio_mix;
 wire  [1:0] scanlines;
-wire  [7:0] r_out, g_out, b_out, hr_out, hg_out, hb_out;
+wire  [7:0] r_out, g_out, b_out, hr_out, hg_out, hb_out, z_out;
+wire  [9:0] x_out, y_out;
 wire        vs_fix, hs_fix, de_emu, vs_emu, hs_emu, f1;
 wire        hvs_fix, hhs_fix, hde_emu;
 wire        clk_vid, ce_pix, clk_ihdmi, ce_hpix;
 wire        vga_force_scaler;
+wire			xyz_o_rgb;
+wire			pwm_clk;
+wire  [3:0] upperb;
+wire		   xyz_rot;
 
 wire        ram_clk;
 wire [28:0] ram_address;
@@ -1584,6 +1651,13 @@ emu emu
 	.VGA_DE(de_emu),
 	.VGA_F1(f1),
 	.VGA_SCALER(vga_force_scaler),
+	.XYZ_X(x_out),
+	.XYZ_Y(y_out),
+	.XYZ_Z(z_out),
+	.XYZ_EN(xyz_o_rgb),
+	.PWM_CLOCK(pwm_clk),
+	.UPPERB(upperb),
+	.XYZ_ROT(xyz_rot),
 
 `ifndef MISTER_DUAL_SDRAM
 	.VGA_DISABLE(VGA_DISABLE),
