@@ -40,6 +40,7 @@ Without a case the board can be plugged in directly to the vga port(not recommen
 Added options in the OSD:
 ```
 XYZ over RGB: enables XYZ output
+Rotate: rotate image
 Lightpen: enables the lightpen and sets the core to use the lightpen button instead of the controller.
 Lightpen Button: select which button in used for the lightpen button.
 OSD Contrast: increase if OSD output is too dim.
