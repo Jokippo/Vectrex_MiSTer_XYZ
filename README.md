@@ -13,7 +13,7 @@ Use the potentiometers to scale the width and height of the image.
 The circuit uses a cheap HW668 voltage booster to produce the 12v required to get sufficient Z channel attenuation on my particular scope (tektronix 2225). With a jumper it is possible to output lower voltages for different scopes, but it doesn't produce negative voltages that some XY monitors might need.
 Likewise the X and Y channels only send positive signals, so horizontal and vertical positions will need to be adjusted on the scope. 
 
-A potential future circuit could use level biasing if there are scopes that need it. Also the Z channel is either off or full intensity now, wich could be improved as well, although not many games seem to really need this.
+A potential future circuit could use level biasing if there are scopes that need it. Also the Z channel is either off or full intensity now, which could be improved as well, although not many games seem to really need this.
 
 ![alt text](https://github.com/Jokippo/Vectrex_MiSTer_XYZ/blob/master/Gerber%20and%20STL/RGB2XYZ_OSD.jpg?raw=true)
 
